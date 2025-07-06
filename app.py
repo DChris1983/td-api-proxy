@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 # 🔐 Replace this with your actual Schwab App Key (Client ID)
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
-REDIRECT_URI = "REDIRECT_URI = "http://localhost:5000/callback"
+REDIRECT_URI = "REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 "
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
