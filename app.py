@@ -6,15 +6,18 @@ import os
 
 app = Flask(__name__)
 
-# 🔐 Schwab App Credentials
-CLIENT_ID = "o6TGb5qdKKKy8arRAGpWwvrKR6AeZhTh"  # Corrected App Key from your screenshot
+# ✅ Your actual Schwab App Key (Client ID)
+CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
+
+# ✅ Must match the Redirect URI registered in Schwab Developer Portal
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
+
+# Schwab OAuth URLs
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 
-# 🔒 PKCE (Proof Key for Code Exchange)
+# Generate PKCE values (code_verifier and challenge)
 code_verifier, code_challenge = pkce.generate_pkce_pair()
-
 
 @app.route("/")
 def login():
@@ -28,7 +31,6 @@ def login():
     auth_link = AUTH_URL + "?" + urllib.parse.urlencode(auth_params)
     return redirect(auth_link)
 
-
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
@@ -37,6 +39,7 @@ def callback():
 
     print("Authorization Code:", code, flush=True)
 
+    # Prepare token exchange request
     token_data = {
         "grant_type": "authorization_code",
         "code": code,
@@ -44,7 +47,9 @@ def callback():
         "client_id": CLIENT_ID,
         "code_verifier": code_verifier
     }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
 
     response = requests.post(TOKEN_URL, headers=headers, data=token_data)
 
@@ -53,7 +58,6 @@ def callback():
     print("Response Body:", response.text, flush=True)
 
     return "Token exchange complete. Check terminal output."
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
