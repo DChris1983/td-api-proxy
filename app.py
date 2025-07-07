@@ -6,13 +6,13 @@ import os
 
 app = Flask(__name__)
 
-# 🔐 Replace this with your actual Schwab App Key (Client ID)
-CLIENT_ID = "o6TGb5q4dKKY8arAqBWqrwrkV6AeZh7hT"
+# 🔐 Schwab App Credentials
+CLIENT_ID = "o6TGb5qdKKKy8arRAGpWwvrKR6AeZhTh"  # Corrected App Key from your screenshot
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 
-# PKCE: one-time secure values
+# 🔒 PKCE (Proof Key for Code Exchange)
 code_verifier, code_challenge = pkce.generate_pkce_pair()
 
 
@@ -58,4 +58,3 @@ def callback():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
