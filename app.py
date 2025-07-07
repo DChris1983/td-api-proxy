@@ -1,20 +1,23 @@
-from flask import Flask, request, redirect, session
+from flask import Flask, request, redirect
 import requests
 import urllib.parse
 import base64
 import os
+import json
+import time
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "supersecretkey")
 
-# ✅ Schwab App credentials (set secret in Render)
+# Schwab OAuth config
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
 CLIENT_SECRET = os.environ.get("SCHWAB_CLIENT_SECRET", "YOUR_SECRET_HERE")
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 OPTION_CHAIN_URL = "https://api.schwabapi.com/marketdata/v1/chains"
+TOKEN_FILE = "token.json"
 
+# OAuth login
 @app.route("/")
 def login():
     auth_params = {
@@ -22,54 +25,85 @@ def login():
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URI
     }
+    return redirect(AUTH_URL + "?" + urllib.parse.urlencode(auth_params))
 
-    auth_link = AUTH_URL + "?" + urllib.parse.urlencode(auth_params)
-    return redirect(auth_link)
-
+# Token exchange and save
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
     if not code:
-        return "No authorization code received."
+        return "No code received."
 
-    auth_string = f"{CLIENT_ID}:{CLIENT_SECRET}"
-    basic_auth = base64.b64encode(auth_string.encode()).decode()
-
+    basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
     headers = {
         "Authorization": f"Basic {basic_auth}",
         "Content-Type": "application/x-www-form-urlencoded"
     }
-
     token_data = {
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": REDIRECT_URI
     }
 
-    encoded_data = urllib.parse.urlencode(token_data)
-    response = requests.post(TOKEN_URL, headers=headers, data=encoded_data)
+    res = requests.post(TOKEN_URL, headers=headers, data=urllib.parse.urlencode(token_data))
+    if res.status_code == 200:
+        token = res.json()
+        token["timestamp"] = int(time.time())
+        with open(TOKEN_FILE, "w") as f:
+            json.dump(token, f)
+        return "Token saved. You're authenticated!"
+    return f"Token error: {res.text}"
 
-    if response.status_code == 200:
-        session["access_token"] = response.json().get("access_token")
-        return "Token exchange complete. You're authenticated!"
-    else:
-        return f"Error getting token: {response.text}"
+# Load and refresh token automatically
+def get_valid_token():
+    if not os.path.exists(TOKEN_FILE):
+        return None
 
-def get_access_token():
-    return session.get("access_token")
+    with open(TOKEN_FILE, "r") as f:
+        token = json.load(f)
 
+    now = int(time.time())
+    expires_in = token.get("expires_in", 1800)
+    issued_at = token.get("timestamp", now)
+    refresh_token = token.get("refresh_token")
+
+    # Refresh if expired
+    if now - issued_at > expires_in - 60 and refresh_token:
+        basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
+        headers = {
+            "Authorization": f"Basic {basic_auth}",
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        refresh_data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "redirect_uri": REDIRECT_URI
+        }
+
+        res = requests.post(TOKEN_URL, headers=headers, data=urllib.parse.urlencode(refresh_data))
+        if res.status_code == 200:
+            new_token = res.json()
+            new_token["timestamp"] = int(time.time())
+            new_token["refresh_token"] = refresh_token  # reuse if not returned
+            with open(TOKEN_FILE, "w") as f:
+                json.dump(new_token, f)
+            return new_token["access_token"]
+        else:
+            print("Refresh failed:", res.text)
+            return None
+
+    return token.get("access_token")
+
+# Scanner endpoint for Option Scout
 @app.route("/scan")
 def scan():
     max_cost = float(request.args.get("maxCost", 8))
-    access_token = get_access_token()
+    access_token = get_valid_token()
 
     if not access_token:
-        return {"error": "No access token. Authenticate via root (/) first."}, 401
+        return {"error": "No valid token. Please authenticate."}, 401
 
-    headers = {
-        "Authorization": f"Bearer {access_token}"
-    }
-
+    headers = {"Authorization": f"Bearer {access_token}"}
     tickers = ["AAPL", "TSLA", "AMD", "NVDA", "SOFI", "DKNG", "MSFT", "GOOGL", "META"]
     viable = []
 
@@ -84,34 +118,31 @@ def scan():
         }
 
         try:
-            response = requests.get(OPTION_CHAIN_URL, headers=headers, params=params)
-            if response.status_code != 200:
-                print(f"Failed on {ticker}: {response.text}")
+            res = requests.get(OPTION_CHAIN_URL, headers=headers, params=params)
+            if res.status_code != 200:
                 continue
 
-            data = response.json()
+            data = res.json()
             calls = data.get("callExpDateMap", {})
             puts = data.get("putExpDateMap", {})
 
-            def extract_prices(option_map):
-                for exp in option_map.values():
-                    for strike, options in exp.items():
-                        for opt in options:
-                            ask = opt.get("ask")
-                            vol = opt.get("totalVolume", 0)
-                            if ask is not None and ask <= max_cost and vol > 100:
+            def has_cheap_options(opt_map):
+                for exp in opt_map.values():
+                    for strike, opts in exp.items():
+                        for o in opts:
+                            if o.get("ask") and o["ask"] <= max_cost and o.get("totalVolume", 0) > 100:
                                 return True
                 return False
 
-            if extract_prices(calls) or extract_prices(puts):
+            if has_cheap_options(calls) or has_cheap_options(puts):
                 viable.append(ticker)
 
         except Exception as e:
-            print(f"Error scanning {ticker}: {e}")
-            continue
+            print(f"{ticker} scan error:", e)
 
     return {"tickers": viable}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
