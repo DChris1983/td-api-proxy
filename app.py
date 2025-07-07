@@ -2,13 +2,12 @@ from flask import Flask, request, redirect, session
 import requests
 import pkce
 import urllib.parse
-import base64
 import os
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "supersecretkey")
 
-# ✅ Schwab credentials and endpoints
+# ✅ Schwab short client ID and registered redirect URI
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
@@ -48,12 +47,8 @@ def callback():
         "code_verifier": code_verifier
     }
 
-    # 🔐 Encode client_id as Basic Auth (client_id + ":")
-    basic_auth = base64.b64encode(f"{CLIENT_ID}:".encode()).decode()
-
     headers = {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": f"Basic {basic_auth}"
+        "Content-Type": "application/x-www-form-urlencoded"
     }
 
     encoded_data = urllib.parse.urlencode(token_data)
