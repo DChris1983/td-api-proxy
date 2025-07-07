@@ -6,10 +6,10 @@ import os
 
 app = Flask(__name__)
 
-# ✅ Use a secret key for session storage (set FLASK_SECRET in Render if deploying)
+# 🔐 Secret key for Flask session
 app.secret_key = os.environ.get("FLASK_SECRET", "supersecretkey")
 
-# ✅ Your Schwab credentials and endpoints
+# ✅ Schwab app credentials and endpoints
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
@@ -17,7 +17,7 @@ TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 
 @app.route("/")
 def login():
-    # 🔐 Generate a fresh PKCE pair and store verifier in session
+    # 🔁 Generate PKCE pair and store verifier in session
     code_verifier, code_challenge = pkce.generate_pkce_pair()
     session["code_verifier"] = code_verifier
 
@@ -38,7 +38,6 @@ def callback():
     if not code:
         return "No authorization code received."
 
-    # 🔁 Retrieve the matching code_verifier from session
     code_verifier = session.get("code_verifier")
     if not code_verifier:
         return "Missing code_verifier. Restart the login process."
@@ -55,7 +54,9 @@ def callback():
         "Content-Type": "application/x-www-form-urlencoded"
     }
 
-    response = requests.post(TOKEN_URL, headers=headers, data=token_data)
+    # ✅ URL-encode the payload as Schwab expects
+    encoded_data = urllib.parse.urlencode(token_data)
+    response = requests.post(TOKEN_URL, headers=headers, data=encoded_data)
 
     print("\n--- TOKEN EXCHANGE RESPONSE ---", flush=True)
     print("Status Code:", response.status_code, flush=True)
@@ -66,3 +67,4 @@ def callback():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
