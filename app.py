@@ -1,20 +1,20 @@
 from flask import Flask, request, redirect
 import requests
 import pkce
-import webbrowser
 import urllib.parse
 import os
 
 app = Flask(__name__)
 
 # 🔐 Replace this with your actual Schwab App Key (Client ID)
-CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
+CLIENT_ID = "o6TGb5q4dKKY8arAqBWqrwrkV6AeZh7hT"
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 
 # PKCE: one-time secure values
 code_verifier, code_challenge = pkce.generate_pkce_pair()
+
 
 @app.route("/")
 def login():
@@ -28,13 +28,14 @@ def login():
     auth_link = AUTH_URL + "?" + urllib.parse.urlencode(auth_params)
     return redirect(auth_link)
 
+
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
     if not code:
         return "No authorization code received."
 
-    print("Authorization Code:", code)
+    print("Authorization Code:", code, flush=True)
 
     token_data = {
         "grant_type": "authorization_code",
@@ -47,11 +48,12 @@ def callback():
 
     response = requests.post(TOKEN_URL, headers=headers, data=token_data)
 
-print("\n--- TOKEN EXCHANGE RESPONSE ---", flush=True)
-print("Status Code:", response.status_code, flush=True)
-print("Response Body:", response.text, flush=True)
+    print("\n--- TOKEN EXCHANGE RESPONSE ---", flush=True)
+    print("Status Code:", response.status_code, flush=True)
+    print("Response Body:", response.text, flush=True)
 
     return "Token exchange complete. Check terminal output."
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
