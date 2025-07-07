@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, session
 import requests
 import pkce
 import urllib.parse
@@ -6,21 +6,21 @@ import os
 
 app = Flask(__name__)
 
-# ✅ Your actual Schwab App Key (Client ID)
+# ✅ Use a secret key for session storage (set FLASK_SECRET in Render if deploying)
+app.secret_key = os.environ.get("FLASK_SECRET", "supersecretkey")
+
+# ✅ Your Schwab credentials and endpoints
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
-
-# ✅ Must match the Redirect URI registered in Schwab Developer Portal
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
-
-# Schwab OAuth URLs
-TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
-
-# Generate PKCE values (code_verifier and challenge)
-code_verifier, code_challenge = pkce.generate_pkce_pair()
+TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 
 @app.route("/")
 def login():
+    # 🔐 Generate a fresh PKCE pair and store verifier in session
+    code_verifier, code_challenge = pkce.generate_pkce_pair()
+    session["code_verifier"] = code_verifier
+
     auth_params = {
         "response_type": "code",
         "client_id": CLIENT_ID,
@@ -28,6 +28,7 @@ def login():
         "code_challenge": code_challenge,
         "code_challenge_method": "S256"
     }
+
     auth_link = AUTH_URL + "?" + urllib.parse.urlencode(auth_params)
     return redirect(auth_link)
 
@@ -37,9 +38,11 @@ def callback():
     if not code:
         return "No authorization code received."
 
-    print("Authorization Code:", code, flush=True)
+    # 🔁 Retrieve the matching code_verifier from session
+    code_verifier = session.get("code_verifier")
+    if not code_verifier:
+        return "Missing code_verifier. Restart the login process."
 
-    # Prepare token exchange request
     token_data = {
         "grant_type": "authorization_code",
         "code": code,
@@ -47,6 +50,7 @@ def callback():
         "client_id": CLIENT_ID,
         "code_verifier": code_verifier
     }
+
     headers = {
         "Content-Type": "application/x-www-form-urlencoded"
     }
