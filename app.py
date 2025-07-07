@@ -1,29 +1,25 @@
 from flask import Flask, request, redirect, session
 import requests
-import pkce
 import urllib.parse
+import base64
 import os
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "supersecretkey")
 
-# ✅ Schwab short client ID and registered redirect URI
+# ✅ Use your actual Schwab App credentials
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
+CLIENT_SECRET = os.environ.get("SCHWAB_CLIENT_SECRET", "YOUR_SECRET_HERE")  # Set this in Render
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 
 @app.route("/")
 def login():
-    code_verifier, code_challenge = pkce.generate_pkce_pair()
-    session["code_verifier"] = code_verifier
-
     auth_params = {
         "response_type": "code",
         "client_id": CLIENT_ID,
-        "redirect_uri": REDIRECT_URI,
-        "code_challenge": code_challenge,
-        "code_challenge_method": "S256"
+        "redirect_uri": REDIRECT_URI
     }
 
     auth_link = AUTH_URL + "?" + urllib.parse.urlencode(auth_params)
@@ -35,20 +31,19 @@ def callback():
     if not code:
         return "No authorization code received."
 
-    code_verifier = session.get("code_verifier")
-    if not code_verifier:
-        return "Missing code_verifier. Restart the login process."
+    # 🛡️ Basic Auth header: base64(client_id:client_secret)
+    auth_string = f"{CLIENT_ID}:{CLIENT_SECRET}"
+    basic_auth = base64.b64encode(auth_string.encode()).decode()
+
+    headers = {
+        "Authorization": f"Basic {basic_auth}",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
 
     token_data = {
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": REDIRECT_URI,
-        "client_id": CLIENT_ID,
-        "code_verifier": code_verifier
-    }
-
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
+        "redirect_uri": REDIRECT_URI
     }
 
     encoded_data = urllib.parse.urlencode(token_data)
