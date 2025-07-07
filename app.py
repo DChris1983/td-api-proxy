@@ -47,9 +47,9 @@ def callback():
 
     response = requests.post(TOKEN_URL, headers=headers, data=token_data)
 
-    print("\n--- TOKEN EXCHANGE RESPONSE ---")
-    print("Status Code:", response.status_code)
-    print("Response Body:", response.text)
+print("\n--- TOKEN EXCHANGE RESPONSE ---", flush=True)
+print("Status Code:", response.status_code, flush=True)
+print("Response Body:", response.text, flush=True)
 
     return "Token exchange complete. Check terminal output."
 
