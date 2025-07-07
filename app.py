@@ -17,7 +17,6 @@ TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 OPTION_CHAIN_URL = "https://api.schwabapi.com/marketdata/v1/chains"
 TOKEN_FILE = "token.json"
 
-# OAuth login
 @app.route("/")
 def login():
     auth_params = {
@@ -27,7 +26,6 @@ def login():
     }
     return redirect(AUTH_URL + "?" + urllib.parse.urlencode(auth_params))
 
-# Token exchange and save
 @app.route("/callback")
 def callback():
     code = request.args.get("code")
@@ -54,11 +52,9 @@ def callback():
         return "Token saved. You're authenticated!"
     return f"Token error: {res.text}"
 
-# Load and refresh token automatically
 def get_valid_token():
     if not os.path.exists(TOKEN_FILE):
         return None
-
     with open(TOKEN_FILE, "r") as f:
         token = json.load(f)
 
@@ -67,7 +63,6 @@ def get_valid_token():
     issued_at = token.get("timestamp", now)
     refresh_token = token.get("refresh_token")
 
-    # Refresh if expired
     if now - issued_at > expires_in - 60 and refresh_token:
         basic_auth = base64.b64encode(f"{CLIENT_ID}:{CLIENT_SECRET}".encode()).decode()
         headers = {
@@ -84,7 +79,7 @@ def get_valid_token():
         if res.status_code == 200:
             new_token = res.json()
             new_token["timestamp"] = int(time.time())
-            new_token["refresh_token"] = refresh_token  # reuse if not returned
+            new_token["refresh_token"] = refresh_token
             with open(TOKEN_FILE, "w") as f:
                 json.dump(new_token, f)
             return new_token["access_token"]
@@ -94,7 +89,6 @@ def get_valid_token():
 
     return token.get("access_token")
 
-# Scanner endpoint for Option Scout
 @app.route("/scan")
 def scan():
     max_cost = float(request.args.get("maxCost", 8))
@@ -142,7 +136,29 @@ def scan():
 
     return {"tickers": viable}
 
+@app.route("/option-chain")
+def option_chain():
+    ticker = request.args.get("ticker")
+    if not ticker:
+        return {"error": "Missing ticker"}, 400
+
+    access_token = get_valid_token()
+    if not access_token:
+        return {"error": "No valid token"}, 401
+
+    headers = {"Authorization": f"Bearer {access_token}"}
+    params = {
+        "symbol": ticker,
+        "contractType": "ALL",
+        "strategy": "SINGLE",
+        "includeQuotes": "TRUE",
+        "range": "NTM",
+        "strikeCount": 20
+    }
+
+    res = requests.get(OPTION_CHAIN_URL, headers=headers, params=params)
+    return res.json(), res.status_code
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
