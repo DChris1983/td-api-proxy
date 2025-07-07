@@ -2,14 +2,13 @@ from flask import Flask, request, redirect, session
 import requests
 import pkce
 import urllib.parse
+import base64
 import os
 
 app = Flask(__name__)
-
-# 🔐 Secret key for Flask session
 app.secret_key = os.environ.get("FLASK_SECRET", "supersecretkey")
 
-# ✅ Schwab app credentials and endpoints
+# ✅ Schwab credentials and endpoints
 CLIENT_ID = "o6TGb5qdKXKy8arRAGpWwrvKR6AeZhTh"
 REDIRECT_URI = "https://td-api-proxy.onrender.com/callback"
 AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
@@ -17,7 +16,6 @@ TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 
 @app.route("/")
 def login():
-    # 🔁 Generate PKCE pair and store verifier in session
     code_verifier, code_challenge = pkce.generate_pkce_pair()
     session["code_verifier"] = code_verifier
 
@@ -50,11 +48,14 @@ def callback():
         "code_verifier": code_verifier
     }
 
+    # 🔐 Encode client_id as Basic Auth (client_id + ":")
+    basic_auth = base64.b64encode(f"{CLIENT_ID}:".encode()).decode()
+
     headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": f"Basic {basic_auth}"
     }
 
-    # ✅ URL-encode the payload as Schwab expects
     encoded_data = urllib.parse.urlencode(token_data)
     response = requests.post(TOKEN_URL, headers=headers, data=encoded_data)
 
@@ -67,4 +68,3 @@ def callback():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-
