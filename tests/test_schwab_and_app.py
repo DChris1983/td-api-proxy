@@ -128,3 +128,11 @@ def test_guide_endpoint_reports_a_lost_login(monkeypatch):
     monkeypatch.delenv("DESK_KEY", raising=False)
     res = flask_app.app.test_client().get("/guide/xyz")
     assert res.status_code == 502 and "Not logged in" in res.get_json()["error"]
+
+
+def test_dashboard_page_is_served_and_lockable(client, monkeypatch):
+    res = client.get("/dashboard")
+    assert res.status_code == 200 and b"Trading Desk" in res.data and b"/daily" in res.data
+    monkeypatch.setenv("DESK_KEY", "s3cret")
+    assert client.get("/dashboard").status_code == 403
+    assert client.get("/dashboard?key=s3cret").status_code == 200

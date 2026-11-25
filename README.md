@@ -9,8 +9,9 @@ Flask app that handles the Schwab OAuth login and serves live answers.
 | Address | What you get |
 | --- | --- |
 | `/` | Sign in to Schwab (needed again when the login expires) |
-| `/guide/NVDA` | What to do with one stock under both methods |
-| `/daily` | The watchlist sorted into what stands out today |
+| `/dashboard` | The page to use day to day: today's list, plus a look-up box for any stock |
+| `/guide/NVDA` | The same answer for one stock, as raw data |
+| `/daily` | The watchlist sorted into what stands out today, as raw data |
 | `/scan`, `/option-chain` | The original option chain lookups |
 
 `/guide` and `/daily` accept `?loss=250` (dollars risked on a stock trade)
@@ -25,7 +26,7 @@ Settings, as environment variables:
 | `DESK_WATCHLIST` | Comma-separated tickers for `/daily` |
 | `DESK_LOSS_THRESHOLD` | Default dollars risked per stock trade (100 if unset) |
 | `DESK_OPTION_BUDGET` | Default dollars per options trade (1000 if unset) |
-| `DESK_KEY` | If set, `/guide` and `/daily` require `?key=` to match |
+| `DESK_KEY` | If set, `/dashboard`, `/guide` and `/daily` require `?key=` to match |
 
 ## `desk/`: the trading desk rules engine
 
@@ -79,6 +80,7 @@ python -m desk longcall META --strike 600 --expires 2028-12-15 --high 120 \
 | `desk/zones.py` | Finds buyer and seller zones on a daily chart |
 | `desk/guide.py` | The guide for one stock and the daily report for a watchlist |
 | `desk/schwab.py` | Reads price history and call chains from the Schwab API |
+| `desk/dashboard.html` | The dashboard page |
 
 Every command exits 0 when the trade passes every check and 1 when it does
 not. Run the tests with `python -m pytest`.

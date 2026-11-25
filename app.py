@@ -193,6 +193,15 @@ def guide_for(data, ticker, settings):
     return build_guide(ticker, candles, calls, settings)
 
 
+@app.route("/dashboard")
+def dashboard():
+    if desk_locked():
+        return "Missing or wrong key.", 403
+    page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "desk", "dashboard.html")
+    with open(page, encoding="utf-8") as f:
+        return f.read()
+
+
 @app.route("/guide/<ticker>")
 def guide(ticker):
     if desk_locked():
