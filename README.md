@@ -2,16 +2,40 @@
 
 Two pieces live here.
 
-## `app.py`: Schwab login and market data proxy
+## `app.py`: Schwab login, market data, and the guide
 
-Flask app that handles the Schwab OAuth login and exposes option chain
-lookups (`/scan`, `/option-chain`). Needs `SCHWAB_CLIENT_SECRET` in the
-environment.
+Flask app that handles the Schwab OAuth login and serves live answers.
+
+| Address | What you get |
+| --- | --- |
+| `/` | Sign in to Schwab (needed again when the login expires) |
+| `/guide/NVDA` | What to do with one stock under both methods |
+| `/daily` | The watchlist sorted into what stands out today |
+| `/scan`, `/option-chain` | The original option chain lookups |
+
+`/guide` and `/daily` accept `?loss=250` (dollars risked on a stock trade)
+and `?budget=2000` (dollars you are prepared to lose on an options trade).
+`/daily` also accepts `?tickers=AAPL,NVDA`.
+
+Settings, as environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `SCHWAB_CLIENT_SECRET` | Required. The Schwab app secret |
+| `DESK_WATCHLIST` | Comma-separated tickers for `/daily` |
+| `DESK_LOSS_THRESHOLD` | Default dollars risked per stock trade (100 if unset) |
+| `DESK_OPTION_BUDGET` | Default dollars per options trade (1000 if unset) |
+| `DESK_KEY` | If set, `/guide` and `/daily` require `?key=` to match |
 
 ## `desk/`: the trading desk rules engine
 
-Pure Python, no dependencies. You bring a setup you have already found; it
-tells you whether the trade fits the plan and why. Two methods are built in.
+Pure Python. Give it a stock and it tells you what to do, or bring a setup
+you charted yourself and it checks it against the plan. Two methods are
+built in.
+
+Zones found automatically are proposals to confirm on your own chart. The
+size of a "long" or "medium" candle is this program's own yardstick; the
+course does not put a number on it.
 
 ### Zone method (stocks)
 
@@ -51,6 +75,10 @@ python -m desk longcall META --strike 600 --expires 2028-12-15 --high 120 \
 | `desk/odds.py` | Odds enhancers: the four zone questions and what the score means |
 | `desk/longcall.py` | Long call checklist: drop, expiration, volume, RSI, limit price, cost |
 | `desk/tracker.py` | Daily scorecard against the 1% and $1k a day targets |
+| `desk/market.py` | Candles, option quotes, and the indicators (RSI, ATR, averages) |
+| `desk/zones.py` | Finds buyer and seller zones on a daily chart |
+| `desk/guide.py` | The guide for one stock and the daily report for a watchlist |
+| `desk/schwab.py` | Reads price history and call chains from the Schwab API |
 
 Every command exits 0 when the trade passes every check and 1 when it does
 not. Run the tests with `python -m pytest`.
