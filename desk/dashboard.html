@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Desk</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f9; --surface: #ffffff; --ink: #191919; --ink-2: #666666;
+    --hair: #e7e7e7; --axis: #c2c2c2; --ring: rgba(11,11,11,0.10);
+    --buyer: #257de0; --seller: #f47230;
+    --good: #0aac23; --good-text: #006c10; --warning: #fbb315; --critical: #dc3c3d;
+    --wash: rgba(11,11,11,0.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #0b0b0b; --surface: #191919; --ink: #efefef; --ink-2: #9c9c9c;
+      --hair: #303030; --axis: #474747; --ring: rgba(255,255,255,0.10);
+      --buyer: #338ced; --seller: #e76624;
+      --good-text: #53c556; --wash: rgba(255,255,255,0.06);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 56px; }
+  h1 { font-size: 22px; margin: 0; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  h3 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0 0 6px; }
+  .sub { color: var(--ink-2); font-size: 13px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; margin: 14px 0 18px; }
+  .bar .grow { flex: 1 1 220px; }
+  label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 3px; }
+  input { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--axis);
+          border-radius: 8px; padding: 8px 10px; width: 100%; min-width: 0; }
+  input.money { width: 110px; }
+  button { font: inherit; font-weight: 600; color: var(--surface); background: var(--ink); border: 0;
+           border-radius: 8px; padding: 9px 16px; cursor: pointer; }
+  button.quiet { color: var(--ink); background: transparent; border: 1px solid var(--axis); }
+  button:focus-visible, input:focus-visible, .row:focus-visible { outline: 2px solid var(--buyer); outline-offset: 2px; }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+  .tile .n { font-size: 30px; font-weight: 650; line-height: 1.1; }
+  .tile .t { font-size: 13px; color: var(--ink-2); }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .row { display: block; width: 100%; text-align: left; background: transparent; color: var(--ink);
+         border: 0; border-top: 1px solid var(--hair); border-radius: 0; padding: 10px 2px; font-weight: 400; }
+  .row:first-of-type { border-top: 0; }
+  .row:hover { background: var(--wash); }
+  .row b { font-weight: 650; }
+  .row .sub { display: block; }
+  .empty { color: var(--ink-2); font-size: 14px; padding: 6px 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;
+          border: 1px solid var(--ring); border-radius: 999px; padding: 3px 10px 3px 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .dot.good { background: var(--good); } .dot.warn { background: var(--warning); }
+  .dot.bad { background: var(--critical); } .dot.none { background: var(--axis); }
+  .guide { margin-top: 18px; display: none; }
+  .guide.on { display: block; }
+  .head { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-bottom: 12px; }
+  .head .px { font-size: 28px; font-weight: 650; }
+  .stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat .v { font-size: 17px; font-weight: 600; } .stat .k { font-size: 12px; color: var(--ink-2); }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .cols > *, .two > *, .split > *, .stats > *, .tiles > * { min-width: 0; }
+  .action { font-size: 15px; margin: 10px 0 14px; }
+  .split { display: grid; grid-template-columns: minmax(0, 320px) minmax(0, 420px); gap: 28px; align-items: start; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 600; font-size: 12px; color: var(--ink-2); padding: 6px 8px 6px 0;
+       border-bottom: 1px solid var(--axis); white-space: nowrap; }
+  td { padding: 7px 12px 7px 0; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .contracts td:not(:last-child) { white-space: nowrap; }
+  .contracts td:last-child { min-width: 220px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  .kv td:first-child { color: var(--ink-2); } .kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .meter { display: flex; gap: 2px; margin-top: 4px; }
+  .meter i { height: 8px; flex: 1; border-radius: 2px; background: var(--hair); }
+  .meter i.on { background: var(--ink); }
+  .checks { list-style: none; margin: 0 0 12px; padding: 0; font-size: 14px; }
+  .checks li { display: flex; gap: 8px; padding: 3px 0; }
+  .mark { font-weight: 700; width: 16px; flex: none; }
+  .mark.ok { color: var(--good-text); } .mark.no { color: var(--critical); }
+  .note { font-size: 13px; color: var(--ink-2); margin: 8px 0 0; }
+  .banner { border-left: 4px solid var(--critical); margin-bottom: 14px; display: none; }
+  .banner.on { display: block; }
+  a { color: inherit; }
+  svg text { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink); }
+  svg text.dim { fill: var(--ink-2); }
+  #tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--surface); font-size: 12px;
+         padding: 6px 8px; border-radius: 6px; max-width: 240px; display: none; z-index: 5; }
+  .foot { margin-top: 26px; font-size: 12px; color: var(--ink-2); }
+  @media (max-width: 860px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); } .cols, .two, .split { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Trading Desk</h1>
+  <div class="sub" id="asof">Loading today's list…</div>
+
+  <form class="bar" id="lookup">
+    <div class="grow"><label for="ticker">Look up a stock</label>
+      <input id="ticker" placeholder="Ticker, for example NVDA" autocomplete="off" autocapitalize="characters"></div>
+    <div><label for="loss">Risk per stock trade ($)</label><input id="loss" class="money" inputmode="decimal"></div>
+    <div><label for="budget">Budget per options trade ($)</label><input id="budget" class="money" inputmode="decimal"></div>
+    <button type="submit">Show the guide</button>
+    <button type="button" class="quiet" id="refresh">Refresh list</button>
+  </form>
+
+  <div class="card banner" id="banner"></div>
+
+  <section aria-label="Today's list">
+    <div class="tiles" id="tiles"></div>
+    <div class="cols">
+      <div class="card"><h2>Stocks at a buyer zone</h2><div id="list-stocks"></div></div>
+      <div class="card"><h2>Calls priced favorably</h2><div id="list-calls"></div></div>
+      <div class="card"><h2>Alerts to set</h2><div id="list-alerts"></div></div>
+    </div>
+    <p class="note" id="quiet"></p>
+  </section>
+
+  <section class="guide" id="guide" aria-live="polite"></section>
+
+  <p class="foot">Zones found automatically are proposals to confirm on your own chart. This is a planning
+    tool: it does not place orders and it is not financial advice.</p>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = (n, d = 2) => n == null ? "n/a" : "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+const num = (n, d = 2) => n == null ? "n/a" : Number(n).toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+const params = new URLSearchParams(location.search);
+
+function saved(name, fallback) { try { return localStorage.getItem(name) || fallback; } catch (e) { return fallback; } }
+function save(name, value) { try { localStorage.setItem(name, value); } catch (e) {} }
+$("loss").value = saved("desk-loss", "");
+$("budget").value = saved("desk-budget", "");
+
+async function api(path, extra = {}) {
+  const q = new URLSearchParams(extra);
+  if (params.get("key")) q.set("key", params.get("key"));
+  if ($("loss").value.trim()) q.set("loss", $("loss").value.trim());
+  if ($("budget").value.trim()) q.set("budget", $("budget").value.trim());
+  const res = await fetch(path + (q.toString() ? "?" + q : ""));
+  let body = {};
+  try { body = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error(body.error || ("The server answered " + res.status + "."));
+  return body;
+}
+
+function banner(message) {
+  const b = $("banner");
+  if (!message) { b.classList.remove("on"); return; }
+  const login = /log|sign/i.test(message) ? ' <a href="/">Sign in to Schwab</a>, then come back and refresh.' : "";
+  b.innerHTML = "<b>Could not load market data.</b> " + esc(message) + login;
+  b.classList.add("on");
+}
+
+function rows(target, items, line, emptyText) {
+  const el = $(target);
+  if (!items.length) { el.innerHTML = '<div class="empty">' + emptyText + "</div>"; return; }
+  el.innerHTML = items.map(i =>
+    '<button class="row" data-ticker="' + esc(i.ticker) + '"><b>' + esc(i.ticker) + "</b> · " + money(i.price) +
+    '<span class="sub">' + line(i) + "</span></button>").join("");
+}
+
+async function loadDaily() {
+  $("asof").textContent = "Loading today's list…";
+  try {
+    const d = await api("/daily");
+    const nothingLoaded = d.errors.length && !d.nothing_today.length &&
+      !d.stocks_at_a_buyer_zone.length && !d.calls_priced_favorably.length;
+    banner(nothingLoaded ? d.errors[0].error : "");
+    const tiles = [
+      [d.stocks_at_a_buyer_zone.length, "Stocks at a buyer zone"],
+      [d.calls_priced_favorably.length, "Calls priced favorably"],
+      [d.alerts_to_set.length, "Alerts to set"],
+      [d.nothing_today.length, "Nothing today"],
+    ];
+    $("tiles").innerHTML = tiles.map(t => '<div class="card tile"><div class="n">' + t[0] +
+      '</div><div class="t">' + t[1] + "</div></div>").join("");
+    rows("list-stocks", d.stocks_at_a_buyer_zone,
+      i => "Buy " + num(i.plan.entry) + " · stop " + num(i.plan.stop) + " · target " + num(i.plan.target) +
+           " · " + num(i.plan.reward_risk, 1) + ":1 · score " + i.plan.odds_score + " of 8",
+      "No stock on the list is at a buyer zone that fits the plan.");
+    rows("list-calls", d.calls_priced_favorably,
+      i => i.contracts.map(c => num(c.strike, 0) + " strike, " + esc(c.expiration) + ", down " +
+           num(c.drop_from_high_pct, 0) + "%, about " + money(c.cost_per_contract, 0)).join("<br>"),
+      "No far-dated call is down 40% from its high.");
+    rows("list-alerts", d.alerts_to_set,
+      i => "Alert at " + num(i.alert_at) + " · " + num(i.percent_away, 1) + "% below the price",
+      "No setups waiting below the price.");
+    const bits = [];
+    if (d.nothing_today.length) bits.push("Nothing today: " + d.nothing_today.map(esc).join(", ") + ".");
+    if (d.errors.length) bits.push("Could not read: " + d.errors.map(e => esc(e.ticker)).join(", ") + ".");
+    $("quiet").innerHTML = bits.join(" ");
+    $("asof").textContent = "Today's list · updated " + new Date().toLocaleString();
+  } catch (err) {
+    banner(err.message);
+    $("asof").textContent = "Today's list could not be loaded.";
+  }
+}
+
+const STATUS = {
+  at_buyer_zone: ["good", "At a buyer zone"],
+  at_buyer_zone_fails: ["bad", "At a buyer zone, does not fit the plan"],
+  between_levels: ["warn", "Between levels: wait"],
+  at_seller_zone: ["warn", "At a seller zone"],
+  no_seller_zone: ["none", "No seller zone above"],
+  no_buyer_zone: ["none", "No buyer zone below"],
+  zones_overlap: ["none", "Zones overlap"],
+};
+
+function ladder(g) {
+  const z = g.zone_method, b = z.buyer_zone, s = z.seller_zone, p = z.plan;
+  if (!b && !s) return "";
+  const marks = [{y: g.price, text: "Price " + num(g.price), kind: "price"}];
+  const prices = [g.price];
+  if (s) { prices.push(s.near_line, s.far_line);
+           marks.push({y: (s.near_line + s.far_line) / 2, text: "Seller zone " + num(s.near_line) + " to " + num(s.far_line), kind: "seller"}); }
+  if (b) { prices.push(b.near_line, b.far_line);
+           marks.push({y: (b.near_line + b.far_line) / 2, text: "Buyer zone " + num(b.far_line) + " to " + num(b.near_line), kind: "buyer"}); }
+  if (p) { prices.push(p.stop); marks.push({y: p.stop, text: "Stop " + num(p.stop), kind: "stop"}); }
+  const lo = Math.min(...prices), hi = Math.max(...prices), pad = (hi - lo) * 0.08 || 1;
+  const W = 300, H = 250, top = 14, bottom = H - 14, x0 = 8, x1 = 96;
+  const y = v => bottom - (v - (lo - pad)) / ((hi + pad) - (lo - pad)) * (bottom - top);
+  const band = (zone, cls, tip) => {
+    const a = y(Math.max(zone.near_line, zone.far_line)), c = y(Math.min(zone.near_line, zone.far_line));
+    return '<rect x="' + x0 + '" y="' + a + '" width="' + (x1 - x0) + '" height="' + Math.max(c - a, 4) +
+           '" rx="4" fill="var(--' + cls + ')" data-tip="' + esc(tip) + '"></rect>';
+  };
+  let out = '<line x1="' + x0 + '" x2="' + x0 + '" y1="' + top + '" y2="' + bottom + '" stroke="var(--axis)"></line>';
+  if (s) out += band(s, "seller", "Seller zone, formed " + s.formed + ". " + s.base_candles + " base candle(s), " + s.leg_out + " leg out, revisited " + s.revisits + " time(s).");
+  if (b) out += band(b, "buyer", "Buyer zone, formed " + b.formed + ". " + b.base_candles + " base candle(s), " + b.leg_out + " leg out, revisited " + b.revisits + " time(s).");
+  if (p) out += '<line x1="' + x0 + '" x2="' + x1 + '" y1="' + y(p.stop) + '" y2="' + y(p.stop) +
+                '" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 4" data-tip="Stop: far line of the buyer zone less 20% of the average daily move."></line>';
+  out += '<line x1="' + x0 + '" x2="' + (x1 + 6) + '" y1="' + y(g.price) + '" y2="' + y(g.price) +
+         '" stroke="var(--ink)" stroke-width="2" data-tip="Last close ' + num(g.price) + '"></line>';
+  // Direct labels, pushed apart so they never overlap.
+  const labels = marks.map(m => ({...m, want: y(m.y)})).sort((a, c) => a.want - c.want);
+  labels.forEach((l, i) => { l.at = i ? Math.max(l.want, labels[i - 1].at + 17) : Math.max(l.want, top + 4); });
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const cap = i === labels.length - 1 ? bottom : labels[i + 1].at - 17;
+    if (labels[i].at > cap) labels[i].at = cap;
+  }
+  labels.forEach(l => {
+    out += '<line x1="' + (x1 + 8) + '" x2="' + (x1 + 20) + '" y1="' + l.want + '" y2="' + (l.at - 4) + '" stroke="var(--axis)"></line>' +
+           '<text x="' + (x1 + 24) + '" y="' + l.at + '"' + (l.kind === "stop" ? ' class="dim"' : "") + ">" + esc(l.text) + "</text>";
+  });
+  return '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" role="img" aria-label="Price against the nearest buyer and seller zones">' + out + "</svg>";
+}
+
+function zoneCard(g) {
+  const z = g.zone_method, p = z.plan, st = STATUS[z.status] || ["none", z.status];
+  let table = "";
+  if (p) {
+    const meter = Array.from({length: 8}, (_, i) => '<i class="' + (i < p.odds_score ? "on" : "") + '"></i>').join("");
+    table = '<table class="kv"><tbody>' +
+      "<tr><td>Entry (buy limit)</td><td>" + money(p.entry) + "</td></tr>" +
+      "<tr><td>Stop (stop market)</td><td>" + money(p.stop) + "</td></tr>" +
+      "<tr><td>Target (sell limit)</td><td>" + money(p.target) + "</td></tr>" +
+      "<tr><td>Reward to risk</td><td>" + num(p.reward_risk, 2) + ":1</td></tr>" +
+      "<tr><td>Shares</td><td>" + num(p.shares, 0) + "</td></tr>" +
+      "<tr><td>Cost</td><td>" + money(p.cost) + "</td></tr>" +
+      "<tr><td>If stopped out</td><td>-" + money(p.max_loss) + "</td></tr>" +
+      "<tr><td>At target</td><td>+" + money(p.profit_at_target) + "</td></tr>" +
+      "<tr><td>Odds enhancers<div class=\"meter\" aria-hidden=\"true\">" + meter + "</div></td><td>" + p.odds_score +
+      " of 8<br><span class=\"sub\">" + esc(p.entry_type) + "</span></td></tr></tbody></table>";
+  }
+  return '<div class="card"><h2>Zone method (stock)</h2><span class="chip"><span class="dot ' + st[0] + '"></span>' +
+    esc(st[1]) + '</span><p class="action">' + esc(z.action) + '</p><div class="split"><div>' + ladder(g) +
+    "</div><div>" + table + "</div></div></div>";
+}
+
+function contractRow(c, label) {
+  const fav = c.favorable ? '<span class="chip"><span class="dot good"></span>Favorable</span>' : "";
+  return "<tr><td>" + (label || "") + num(c.strike, 0) + '<div class="sub">' + num(c.strike_above_price_pct, 1) + "% above</div></td>" +
+    "<td>" + esc(c.expiration) + '<div class="sub">' + c.days_left + " days</div></td>" +
+    '<td class="num">' + num(c.bid) + " / " + num(c.ask) + "</td>" +
+    '<td class="num">' + money(c.cost_per_contract, 0) + '<div class="sub">' + c.contracts_within_budget + " in budget</div></td>" +
+    '<td class="num">' + (c.drop_from_high_pct == null ? "n/a" : num(c.drop_from_high_pct, 0) + "%") + "</td>" +
+    "<td>" + fav + '<div class="sub">' + esc(c.verdict) + (c.like_class_example ? " " + esc(c.like_class_example) : "") + "</div></td></tr>";
+}
+
+function callCard(g) {
+  const c = g.long_call_method;
+  const anyFav = c.far_dated.some(r => r.favorable);
+  const st = c.standout ? ["good", "Calls priced favorably"] :
+             c.stock_checks.every(k => k.passed) ? ["warn", "Nothing to buy right now"] : ["bad", "Stock fails the checks"];
+  const checks = c.stock_checks.map(k => '<li><span class="mark ' + (k.passed ? "ok" : "no") + '">' + (k.passed ? "✓" : "✕") +
+    "</span><span>" + esc(k.name) + ' <span class="sub">(' + esc(k.detail) + ")</span></span></li>").join("");
+  const head = '<thead><tr><th>Strike</th><th>Expires</th><th class="num">Bid / ask</th><th class="num">Per contract</th>' +
+    '<th class="num">Drop</th><th>Verdict</th></tr></thead>';
+  let tables = "";
+  if (c.far_dated.length) tables += "<h3>Far-dated calls" + (anyFav ? "" : " (none down 40% yet)") + '</h3><div class="scroll"><table class="contracts">' + head +
+    "<tbody>" + c.far_dated.map(r => contractRow(r)).join("") + "</tbody></table></div>";
+  if (c.swing_example) tables += '<h3 style="margin-top:14px">Short-dated swing idea</h3><div class="scroll"><table class="contracts">' + head + "<tbody>" +
+    contractRow(c.swing_example) + "</tbody></table></div>";
+  return '<div class="card"><h2>Long call method (options)</h2><span class="chip"><span class="dot ' + st[0] + '"></span>' +
+    st[1] + '</span><p class="action">' + esc(c.action) + '</p><ul class="checks">' + checks + "</ul>" + tables +
+    c.notes.map(n => '<p class="note">' + esc(n) + "</p>").join("") + "</div>";
+}
+
+async function loadGuide(ticker) {
+  ticker = ticker.trim().toUpperCase();
+  if (!ticker) return;
+  const el = $("guide");
+  el.classList.add("on");
+  el.innerHTML = '<div class="card">Loading ' + esc(ticker) + "…</div>";
+  try {
+    const g = await api("/guide/" + encodeURIComponent(ticker));
+    if (g.error) throw new Error(g.error);
+    const s = g.snapshot;
+    const stats = [["Average daily move", money(s.average_daily_move)], ["RSI (14)", num(s.rsi_14, 0)],
+      ["Average volume", num(s.average_volume, 0)], ["50-day", money(s.sma_50)], ["100-day", money(s.sma_100)],
+      ["200-day", money(s.sma_200)]];
+    el.innerHTML = '<div class="head"><h2 style="font-size:22px;margin:0">' + esc(g.ticker) + '</h2><span class="px">' + money(g.price) +
+      '</span><span class="sub">last close, ' + esc(g.as_of) + '</span></div><div class="stats">' +
+      stats.map(x => '<div class="card stat"><div class="v">' + x[1] + '</div><div class="k">' + x[0] + "</div></div>").join("") +
+      '</div><div class="two">' + zoneCard(g) + callCard(g) + "</div>";
+    el.scrollIntoView({behavior: "smooth", block: "start"});
+  } catch (err) {
+    el.innerHTML = '<div class="card"><b>' + esc(ticker) + ":</b> " + esc(err.message) + "</div>";
+  }
+}
+
+$("lookup").addEventListener("submit", e => {
+  e.preventDefault();
+  save("desk-loss", $("loss").value.trim()); save("desk-budget", $("budget").value.trim());
+  loadGuide($("ticker").value);
+});
+$("refresh").addEventListener("click", () => {
+  save("desk-loss", $("loss").value.trim()); save("desk-budget", $("budget").value.trim());
+  loadDaily();
+});
+document.addEventListener("click", e => {
+  const row = e.target.closest(".row");
+  if (row) { $("ticker").value = row.dataset.ticker; loadGuide(row.dataset.ticker); }
+});
+const tip = $("tip");
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest && e.target.closest("[data-tip]");
+  if (!t) { tip.style.display = "none"; return; }
+  tip.textContent = t.dataset.tip; tip.style.display = "block";
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - 250) + "px"; tip.style.top = (e.clientY + 14) + "px";
+});
+loadDaily();
+if (params.get("ticker")) { $("ticker").value = params.get("ticker"); loadGuide(params.get("ticker")); }
+</script>
+</body>
+</html>

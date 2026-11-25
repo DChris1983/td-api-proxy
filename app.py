@@ -159,6 +159,75 @@ def option_chain():
     res = requests.get(OPTION_CHAIN_URL, headers=headers, params=params)
     return res.json(), res.status_code
 
+# ---------------------------------------------------------------------------
+# Trading desk: the guide for one stock and the daily list
+# ---------------------------------------------------------------------------
+from dataclasses import replace
+
+from desk.guide import DEFAULT_GUIDE_SETTINGS, build_daily_report, build_guide
+from desk.schwab import DataError, SchwabData
+
+DEFAULT_WATCHLIST = "AAPL,TSLA,AMD,NVDA,SOFI,DKNG,MSFT,GOOGL,META"
+
+
+def desk_locked():
+    """True when DESK_KEY is set and the request does not carry it."""
+    key = os.environ.get("DESK_KEY")
+    return bool(key) and request.args.get("key") != key
+
+
+def desk_settings():
+    return replace(
+        DEFAULT_GUIDE_SETTINGS,
+        loss_threshold=float(request.args.get("loss", os.environ.get("DESK_LOSS_THRESHOLD", 100))),
+        option_budget=float(request.args.get("budget", os.environ.get("DESK_OPTION_BUDGET", 1000))),
+    )
+
+
+def guide_for(data, ticker, settings):
+    candles = data.daily_candles(ticker)
+    try:
+        calls = data.calls(ticker)
+    except DataError:
+        calls = None  # still give the stock guide when the option chain is unavailable
+    return build_guide(ticker, candles, calls, settings)
+
+
+@app.route("/dashboard")
+def dashboard():
+    if desk_locked():
+        return "Missing or wrong key.", 403
+    page = os.path.join(os.path.dirname(os.path.abspath(__file__)), "desk", "dashboard.html")
+    with open(page, encoding="utf-8") as f:
+        return f.read()
+
+
+@app.route("/guide/<ticker>")
+def guide(ticker):
+    if desk_locked():
+        return {"error": "Missing or wrong key."}, 403
+    try:
+        return guide_for(SchwabData(get_valid_token), ticker, desk_settings())
+    except DataError as err:
+        return {"ticker": ticker.upper(), "error": str(err)}, 502
+    except ValueError as err:
+        return {"ticker": ticker.upper(), "error": str(err)}, 400
+
+
+@app.route("/daily")
+def daily():
+    if desk_locked():
+        return {"error": "Missing or wrong key."}, 403
+    try:
+        settings = desk_settings()
+    except ValueError as err:
+        return {"error": str(err)}, 400
+    names = request.args.get("tickers") or os.environ.get("DESK_WATCHLIST", DEFAULT_WATCHLIST)
+    tickers = [t.strip().upper() for t in names.split(",") if t.strip()]
+    data = SchwabData(get_valid_token)
+    return build_daily_report(tickers, lambda t: guide_for(data, t, settings))
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
