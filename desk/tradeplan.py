@@ -12,8 +12,9 @@ has decided, in advance, they are willing to lose on this one trade.
 
 import math
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
+from .odds import SKIP_ZONE, OddsScore, ZoneQuality, entry_action, score_zone
 from .rules import DEFAULT_RULES, Rulebook
 
 LONG = "long"
@@ -58,6 +59,8 @@ class TradePlan:
     profit_at_target: float
     loss_threshold: float
     checks: List[Check] = field(default_factory=list)
+    odds: Optional[OddsScore] = None  # set when the zone was graded
+    entry_type: Optional[str] = None  # how to enter, from the odds score
 
     @property
     def approved(self) -> bool:
@@ -75,7 +78,8 @@ def _direction(value: str) -> str:
     return d
 
 
-def _finish(ticker, kind, direction, entry, stop, target, loss_threshold, rules, extra_checks):
+def _finish(ticker, kind, direction, entry, stop, target, loss_threshold, rules, extra_checks,
+            quality=None):
     if loss_threshold <= 0:
         raise ValueError("loss threshold must be a positive dollar amount")
 
@@ -118,6 +122,16 @@ def _finish(ticker, kind, direction, entry, stop, target, loss_threshold, rules,
         else f"one share risks ${risk:,.2f}, more than the ${loss_threshold:,.2f} threshold",
     ))
 
+    odds = entry_type = None
+    if quality is not None:
+        odds = score_zone(reward_risk, quality)
+        entry_type = entry_action(odds.total, rules)
+        checks.append(Check(
+            f"odds enhancers score at least {rules.odds_confirmation} of 8",
+            entry_type != SKIP_ZONE,
+            f"{odds.total} of 8 ({odds.breakdown()}): {entry_type}",
+        ))
+
     return TradePlan(
         ticker=ticker.upper(),
         kind=kind,
@@ -134,6 +148,8 @@ def _finish(ticker, kind, direction, entry, stop, target, loss_threshold, rules,
         profit_at_target=round(shares * reward, 2) if reward > 0 else 0.0,
         loss_threshold=loss_threshold,
         checks=checks,
+        odds=odds,
+        entry_type=entry_type,
     )
 
 
@@ -145,6 +161,8 @@ def plan_zone_trade(
     avg_daily_move: float,
     loss_threshold: float,
     rules: Rulebook = DEFAULT_RULES,
+    entry_zone_quality: Optional[ZoneQuality] = None,
+    days_to_earnings: Optional[int] = None,
 ) -> TradePlan:
     """Plan a trade between a buyer zone below and a seller zone above.
 
@@ -152,6 +170,10 @@ def plan_zone_trade(
            the seller zone, stop below the buyer zone.
     Short: sell at the bottom line of the seller zone, cover at the top line
            of the buyer zone, stop above the seller zone.
+
+    `entry_zone_quality` grades the zone you enter at with the odds
+    enhancers. `days_to_earnings` is the days until the next earnings date
+    (negative for days since the last one).
     """
     direction = _direction(direction)
     if avg_daily_move <= 0:
@@ -170,7 +192,18 @@ def plan_zone_trade(
         seller_zone.low > buyer_zone.high,
         f"buyer zone tops out at {buyer_zone.high:,.2f}, seller zone starts at {seller_zone.low:,.2f}",
     )
-    return _finish(ticker, "zone", direction, entry, stop, target, loss_threshold, rules, [zones_ordered])
+    checks = [zones_ordered]
+    if days_to_earnings is not None:
+        window = rules.earnings_blackout_days
+        when = (f"earnings in {days_to_earnings} days" if days_to_earnings >= 0
+                else f"earnings were {-days_to_earnings} days ago")
+        checks.append(Check(
+            f"outside the earnings window ({window} days either side)",
+            abs(days_to_earnings) > window,
+            when,
+        ))
+    return _finish(ticker, "zone", direction, entry, stop, target, loss_threshold, rules, checks,
+                   quality=entry_zone_quality)
 
 
 def plan_trend_trade(
